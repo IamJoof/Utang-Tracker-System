@@ -7,18 +7,15 @@ if (!isset($_SESSION['admin'])) {
     exit;
 }
 
-// Handle new purchase
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $name = $_POST['name'];
-    $item = $_POST['item'];
+    $item = $_POST['item_name'];
     $qty = $_POST['quantity'];
     $total = $_POST['total'];
-    $date_purchase = $_POST['date_purchased'];
+    $date_purchase = $_POST['date_purchase'];
     $payment = floatval($_POST['payment']);
     $balance = floatval($_POST['total']) - $payment;
 
-
-    // Check if customer exists
     $stmt = $conn->prepare("SELECT id FROM customers WHERE name = ?");
     $stmt->bind_param("s", $name);
     $stmt->execute();
@@ -35,14 +32,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $customer_id = $conn->insert_id;
     }
 
-    // Insert purchase (excluding date_debt and date_payment)
     $stmt = $conn->prepare("INSERT INTO purchases (customer_id, item_name, quantity, total_price, date_purchased, payments, remaining_balance) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("isidddd", $customer_id, $item, $qty, $total, $date_purchase, $payment, $balance);
+    $stmt->bind_param("isidsdd", $customer_id, $item, $qty, $total, $date_purchase, $payment, $balance);
     $stmt->execute();
+
+    header("Location: dashboard.php");
+    exit;
 }
 
-// Fetch customers and their balances
-$customers = $conn->query("SELECT c.name, c.unique_id, SUM(p.remaining_balance) AS total_balance FROM customers c JOIN purchases p ON c.id = p.customer_id GROUP BY c.id");?>
+$search = isset($_GET['search']) ? $_GET['search'] : '';
+
+$query = "SELECT c.name, c.unique_id, SUM(p.remaining_balance) AS total_balance FROM customers c JOIN purchases p ON c.id = p.customer_id GROUP BY c.id";
+if (strlen($search) > 0) {
+    $filters = [];
+    $filters[] = "c.name LIKE '%$search%'";
+    $filters[] = "c.unique_id LIKE '%$search%'";
+    $filters[] = "SUM(p.remaining_balance) LIKE '%$search%'";
+    $query .= " HAVING " . implode(" OR ", $filters);
+}
+
+$customers = $conn->query($query);
+
+?>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -80,7 +91,7 @@ $customers = $conn->query("SELECT c.name, c.unique_id, SUM(p.remaining_balance) 
 
                 <div>
                     <label for="item" class="block text-gray-700 font-medium mb-1">Item Name</label>
-                    <input type="text" name="item" id="item" required class="p-2 border rounded w-full focus:outline-none focus:ring-2 focus:ring-green-600">
+                    <input type="text" name="item_name" id="item" required class="p-2 border rounded w-full focus:outline-none focus:ring-2 focus:ring-green-600">
                 </div>
 
                 <div>
@@ -108,6 +119,10 @@ $customers = $conn->query("SELECT c.name, c.unique_id, SUM(p.remaining_balance) 
 
         <div class="bg-white p-6 rounded-lg shadow-md">
             <h2 class="text-xl font-bold text-green-700 mb-4">Customer Balance Overview</h2>
+            <form method="GET" action="dashboard.php" class="mb-4">
+                <label for="search" class="block text-gray-700 font-medium mb-1">Search:</label>
+                <input type="text" name="search" id="search" value="<?= htmlspecialchars($search) ?>" class="p-2 border rounded w-full focus:outline-none focus:ring-2 focus:ring-green-600" onchange="this.form.submit()">
+            </form>
             <table class="min-w-full table-auto border-collapse border border-green-300">
                 <thead>
                     <tr class="bg-green-200 text-green-800">
@@ -136,3 +151,4 @@ $customers = $conn->query("SELECT c.name, c.unique_id, SUM(p.remaining_balance) 
 
 </body>
 </html>
+

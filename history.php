@@ -53,8 +53,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['purchase_id'], $_POST
     exit;
 }
 
+// Filter purchases based on search query
+$search = isset($_GET['search']) ? $_GET['search'] : '';
 
-$purchases = $conn->query("SELECT * FROM purchases WHERE customer_id = $customer_id ORDER BY date_purchased DESC");
+$query = "SELECT * FROM purchases WHERE customer_id = $customer_id";
+if (strlen($search) > 0) {
+    $filters = [];
+    $filters[] = "item_name LIKE '%$search%'";
+    $filters[] = "quantity LIKE '%$search%'";
+    $filters[] = "total_price LIKE '%$search%'";
+    $filters[] = "remaining_balance LIKE '%$search%'";
+    $filters[] = "date_purchased LIKE '%$search%'";
+
+    $query .= " AND " . implode(" OR ", $filters);
+}
+$query .= " ORDER BY date_purchased DESC";
+
+$purchases = $conn->query($query);
 ?>
 
 <!DOCTYPE html>
@@ -77,33 +92,47 @@ $purchases = $conn->query("SELECT * FROM purchases WHERE customer_id = $customer
         <h1 class="text-3xl font-bold mb-6 text-green-800">Purchase History for <?= htmlspecialchars($customer['name']) ?></h1>
 
         <div class="bg-white p-6 rounded-lg shadow-md">
-            <table class="min-w-full table-auto border-collapse border border-green-300">
-                <thead>
-                    <tr class="bg-green-200 text-green-800">
-                        <th class="border border-green-300 px-4 py-2">Item</th>
-                        <th class="border border-green-300 px-4 py-2">Quantity</th>
-                        <th class="border border-green-300 px-4 py-2">Total Price</th>
-                        <th class="border border-green-300 px-4 py-2">Remaining</th>
-                        <th class="border border-green-300 px-4 py-2">Date</th>
-                        <th class="border border-green-300 px-4 py-2">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while ($row = $purchases->fetch_assoc()): ?>
-                    <tr class="text-center">
-                        <td class="border px-4 py-2"><?= htmlspecialchars($row['item_name']) ?></td>
-                        <td class="border px-4 py-2"><?= $row['quantity'] ?></td>
-                        <td class="border px-4 py-2">₱<?= number_format($row['total_price'], 2) ?></td>
-                        <td class="border px-4 py-2 text-red-600 font-semibold">₱<?= number_format($row['remaining_balance'] ?? 0, 2) ?></td>
-                        <td class="border px-4 py-2"><?= $row['date_purchased'] ?></td>
-                        <td class="border px-4 py-2">
-                            <button onclick="openModal(<?= $row['id'] ?>)" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Pay</button>
-                        </td>
-                    </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
+            <form method="GET" action="history.php">
+                <input type="hidden" name="uid" value="<?= $unique_id ?>">
+                <label for="search" class="block text-gray-700 font-medium mb-1">Search:</label>
+                <input type="text" name="search" id="search" value="<?= htmlspecialchars($search) ?>" class="p-2 border rounded w-full focus:outline-none focus:ring-2 focus:ring-green-600" onchange="this.form.submit()">
+                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 hidden">Search</button>
+            </form>
         </div>
+
+        <table class="min-w-full table-auto border-collapse border border-green-300">
+            <thead>
+                <tr class="bg-green-200 text-green-800">
+                    <th class="border border-green-300 px-4 py-2">Item</th>
+                    <th class="border border-green-300 px-4 py-2">Quantity</th>
+                    <th class="border border-green-300 px-4 py-2">Total Price</th>
+                    <th class="border border-green-300 px-4 py-2">Remaining</th>
+                    <th class="border border-green-300 px-4 py-2">Date</th>
+                    <th class="border border-green-300 px-4 py-2">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php while ($row = $purchases->fetch_assoc()): ?>
+                <tr class="text-center">
+                    <td class="border px-4 py-2"><?= htmlspecialchars($row['item_name']) ?></td>
+                    <td class="border px-4 py-2"><?= $row['quantity'] ?></td>
+                    <td class="border px-4 py-2">₱<?= number_format($row['total_price'], 2) ?></td>
+                    <td class="border px-4 py-2 text-red-600 font-semibold">₱<?= number_format($row['remaining_balance'] ?? 0, 2) ?></td>
+                    <td class="border px-4 py-2">
+                        <?php
+                        $datePurchased = $row['date_purchased'];
+                        $dateTime = new DateTime($datePurchased);
+                        $formattedDate = $dateTime->format('Y-m-d'); 
+                        echo $formattedDate;
+                        ?>
+                    </td>
+                    <td class="border px-4 py-2">
+                        <button onclick="openModal(<?= $row['id'] ?>)" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Pay</button>
+                    </td>
+                </tr>
+                <?php endwhile; ?>
+            </tbody>
+        </table>
     </div>
 
     <!-- Modal -->
@@ -132,3 +161,5 @@ $purchases = $conn->query("SELECT * FROM purchases WHERE customer_id = $customer
     </script>
 </body>
 </html>
+
+
